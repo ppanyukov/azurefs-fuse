@@ -20,10 +20,30 @@ For now there are the following file systems:
 ```
 
 
+In progress:
+
+```
+- flatblobfs: list blobs in a container as a flat list of files
+
+    supported functionality so far:
+    
+        - ls: list blobs as files
+              The blob names are properly escaped to make valid file
+              names so even blobs named '/usr/bin/ls' work just fine.
+
+    next steps in this order:
+
+        - touch <blob_name>: create an empty blob
+        - rm <blob_name>: delete blob
+        
+        - cat 'some content' > <blob_name>: write something into blob
+        - cat <blob_name>: read the contents of a blob
+```
+
+
 Next to do:
 
 ```
-- blobfs_flat: list blobs a a flat list of files
-- blobfs_tree: traditional directory/file-based approach
+- treeblobfs: traverse blobs in a container in a traditional directory/file-based way
 ```
 
