@@ -71,11 +71,11 @@ func main() {
 	}
 
 	var fs pathfs.FileSystem
-	helloFs := blobfs.NewContainerFs(storageClient)
+	containerFs := blobfs.NewContainerFs(storageClient)
 	if isTrace {
-		fs = blobfs.NewTraceFs(helloFs)
+		fs = blobfs.NewTraceFs(containerFs)
 	} else {
-		fs = helloFs
+		fs = containerFs
 	}
 
 	nfs := pathfs.NewPathNodeFs(fs, nil)
