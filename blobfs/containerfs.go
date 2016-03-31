@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -14,6 +14,19 @@ import (
 )
 
 // TODO(ppanyukov): performance, caching etc, once we have stuff working :)
+
+// isValidContainerName tells if the name we are requested to resolve
+// is a possible valid container name.
+// Container names can't have certain chars in them.
+// The forward slash is obvious.
+// The star and various others are not allowed either.
+// Also the mininum length is 3 chars.
+var validContainerRegex = regexp.MustCompile(`^[a-zA-Z0-9]{3,}$`)
+
+func isInvalidContainerName(name string) bool {
+	// return len(name) < 3 || strings.ContainsAny(name, "/*[]")
+	return !validContainerRegex.MatchString(name)
+}
 
 // NewContainerFs creates a filesystem that lists containers as directories.
 func NewContainerFs(storageClient storage.Client) pathfs.FileSystem {
@@ -52,14 +65,15 @@ func (fs *containerFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, 
 		return &fs.defaultFuseAttr, fuse.OK
 	}
 
-	if strings.Contains(name, "/") {
+	// Don't make api calls for container names we know are not valid upfront.
+	if isInvalidContainerName(name) {
 		return nil, fuse.ENOENT
 	}
 
 	exists, err := fs.client.ContainerExists(name)
 
 	if err != nil {
-		fs.log.Printf("[ERROR] GetAttr '%s': %s'\n", name, err)
+		fs.log.Printf("[ERROR] GetAttr '%s': %s\n", name, err)
 		return nil, fuse.EIO
 	}
 
@@ -95,9 +109,15 @@ func (fs *containerFs) Mknod(name string, mode uint32, dev uint32, context *fuse
 }
 
 func (fs *containerFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
+	// Can create containers at the root level
+	if isInvalidContainerName(name) {
+		fs.log.Printf("[ERROR] Mkdir '%s': This container name is not valid.\n", name)
+		return fuse.EPERM
+	}
+
 	err := fs.client.CreateContainer(name, storage.ContainerAccessTypePrivate)
 	if err != nil {
-		fs.log.Printf("[ERROR] GetAttr '%s': %s'\n", name, err)
+		fs.log.Printf("[ERROR] Mkdir '%s': %s\n", name, err)
 		return fuse.EIO
 	}
 	return fuse.OK
@@ -108,6 +128,12 @@ func (fs *containerFs) Unlink(name string, context *fuse.Context) (code fuse.Sta
 }
 
 func (fs *containerFs) Rmdir(name string, context *fuse.Context) (code fuse.Status) {
+	// TODO(ppanyukov): prevent deletion of containers which have blobs.
+
+	if isInvalidContainerName(name) {
+		return fuse.ENOENT
+	}
+
 	err := fs.client.DeleteContainer(name)
 	if err != nil {
 		fs.log.Printf("[ERROR] Rmdir '%s': %s'\n", name, err)
