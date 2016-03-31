@@ -78,7 +78,7 @@ func (fs *traceFs) Unlink(name string, context *fuse.Context) (code fuse.Status)
 
 func (fs *traceFs) Rmdir(name string, context *fuse.Context) (code fuse.Status) {
 	fs.log.Println("[TRACE] Rmdir:", "name:", name)
-	return fs.fs.Unlink(name, context)
+	return fs.fs.Rmdir(name, context)
 }
 
 func (fs *traceFs) Symlink(value string, linkName string, context *fuse.Context) (code fuse.Status) {
