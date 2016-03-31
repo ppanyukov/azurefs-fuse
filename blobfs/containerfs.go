@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"syscall"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -128,13 +129,23 @@ func (fs *containerFs) Unlink(name string, context *fuse.Context) (code fuse.Sta
 }
 
 func (fs *containerFs) Rmdir(name string, context *fuse.Context) (code fuse.Status) {
-	// TODO(ppanyukov): prevent deletion of containers which have blobs.
-
 	if isInvalidContainerName(name) {
 		return fuse.ENOENT
 	}
 
-	err := fs.client.DeleteContainer(name)
+	// Check if empty container
+	blobListResponse, err := fs.client.ListBlobs(name, storage.ListBlobsParameters{MaxResults: 1})
+	if err != nil {
+		fs.log.Printf("[ERROR] Rmdir '%s': %s'\n", name, err)
+		return fuse.EIO
+	}
+
+	if len(blobListResponse.Blobs) > 0 {
+		// TODO(ppanyukov): why fuse lib doesn't have ENOTEMPTY?
+		return fuse.Status(syscall.ENOTEMPTY)
+	}
+
+	err = fs.client.DeleteContainer(name)
 	if err != nil {
 		fs.log.Printf("[ERROR] Rmdir '%s': %s'\n", name, err)
 		return fuse.EIO
