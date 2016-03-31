@@ -15,7 +15,7 @@ For now there are the following file systems:
         - ls: list containers
         - cd <container_name>
         - mkdir <container_name>: creates the container
-        - rmdir <container_name>: not yet! although easy enough to do.
+        - rmdir <container_name>: zap container (and all blobs!). Very unsafe for now.
         
 ```
 
