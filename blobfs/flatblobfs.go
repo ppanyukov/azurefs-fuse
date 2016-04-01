@@ -234,6 +234,16 @@ func (fs *flatblobFs) Access(name string, mode uint32, context *fuse.Context) (c
 }
 
 func (fs *flatblobFs) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+	// TODO(ppanyukov): probably should crate blobs in Create instead of Mknod?
+	// The first time we try to `touch bar` we get a call to Create like this:
+	//   Create: name: bar flags: 34881 (O_WRONLY|O_CREAT|O_ACCMODE|O_NONBLOCK|O_LARGEFILE) mode: 33188
+	//
+	// If we return ENOSYS, everything still works via Mknod.
+	// Not sure what the difference this makes in grand scheme of things.
+	// One difficulty with Create is we are supposed to return File which, in theory
+	// should be ready to read/write depending on flags. Which complicates things really.
+	//
+	// Perhaps it's OK to not support Create.
 	return nil, fuse.ENOSYS
 }
 
