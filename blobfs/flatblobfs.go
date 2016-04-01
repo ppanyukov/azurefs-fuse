@@ -51,10 +51,11 @@ func (fs *flatblobFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, f
 		return &fs.defaultFuseAttr, fuse.OK
 	}
 
-	blobName, err := fs.FileNameToBlobName(name)
+	blobName, err := fs.pathEscaper.FileNameToBlobName(name)
 	if err != nil {
 		fs.log.Printf("[ERROR] GetAttr '%s': Could not convert file name to blob name. %s\n", name, err)
-		return nil, fuse.EIO
+		// TODO(ppanyukov): is this correct status to return?
+		return nil, fuse.EINVAL
 	}
 
 	exists, err := fs.client.BlobExists(fs.accountContainer, blobName)
@@ -92,7 +93,32 @@ func (fs *flatblobFs) Readlink(name string, context *fuse.Context) (string, fuse
 }
 
 func (fs *flatblobFs) Mknod(name string, mode uint32, dev uint32, context *fuse.Context) fuse.Status {
-	return fuse.ENOSYS
+	// This one is called when we do `touch foo`. Here is where we want to create blobs.
+	// Must also minimally implement Utimens.
+	// The sequence is like this:
+	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] Mknod: name: foo mode: 33188 dev: 0
+	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 09:36:21 [TRACE] Utimens: name: foo
+
+	blobName, err := fs.pathEscaper.FileNameToBlobName(name)
+	if err != nil {
+		fs.log.Printf("[ERROR] Mknod '%s': Could not convert file name to blob name. %s\n", name, err)
+		// TODO(ppanyukov): is this correct status to return?
+		return fuse.EINVAL
+	}
+
+	// Assume that if we get to here the OS has already checked that
+	// this file does not exist. However because it's a remote multi-user
+	// system, there is always a chance it appeared in the meantime.
+	// TODO(ppanyukov): how does azure handle create blob request if blob exists?
+	err = fs.client.CreateBlockBlob(fs.accountContainer, blobName)
+	if err != nil {
+		fs.log.Printf("[ERROR] Mknod '%s': Could not create blob. %s\n", name, err)
+		return fuse.EIO
+	}
+
+	return fuse.OK
 }
 
 func (fs *flatblobFs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
@@ -147,6 +173,12 @@ func (fs *flatblobFs) OpenDir(name string, context *fuse.Context) (stream []fuse
 	}
 
 	blobs := res.Blobs
+
+	// Preallocate the array with capacity equal to the number of blobs
+	// but set initial len to 0 and grow as needed.
+	// Reason is there may be blobs which we can't translate to file names
+	// due to bugs or escaping issues and so may end up with fewer files than
+	// there are blobs.
 	stream = make([]fuse.DirEntry, 0, len(blobs))
 	for _, blob := range blobs {
 		blobName := blob.Name
@@ -180,7 +212,9 @@ func (fs *flatblobFs) Create(name string, flags uint32, mode uint32, context *fu
 }
 
 func (fs *flatblobFs) Utimens(name string, Atime *time.Time, Mtime *time.Time, context *fuse.Context) (code fuse.Status) {
-	return fuse.ENOSYS
+	// TODO(ppanyukov): Meaningful implementatin of Utimens. For now just return OK.
+	// This is so other things like `touch foo` work without errors. See Mknod.
+	return fuse.OK
 }
 
 func (fs *flatblobFs) String() string {

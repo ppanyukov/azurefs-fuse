@@ -31,11 +31,13 @@ In progress:
               The blob names are properly escaped to make valid file
               names so even blobs named '/usr/bin/ls' work just fine.
 
+        - touch <blob_name>: creates an empty blob if does not exist already
+              TODO(ppanyukov): implement setting times on blobs.
+
+
     next steps in this order:
 
-        - touch <blob_name>: create an empty blob
         - rm <blob_name>: delete blob
-        
         - cat 'some content' > <blob_name>: write something into blob
         - cat <blob_name>: read the contents of a blob
 ```
