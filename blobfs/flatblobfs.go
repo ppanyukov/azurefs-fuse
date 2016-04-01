@@ -24,8 +24,11 @@ func NewFlatBlobFs(accountContainer string, storageClient storage.Client) pathfs
 		client:           storageClient.GetBlobService(),
 		accountContainer: accountContainer,
 		log:              log.New(os.Stderr, logPrefix, log.LstdFlags),
-		defaultFuseAttr: fuse.Attr{
+		defaultDirFuseAttr: fuse.Attr{
 			Mode: fuse.S_IFDIR | 0755,
+		},
+		defaultFileFuseAttr: fuse.Attr{
+			Mode: fuse.S_IFREG | 0644,
 		},
 		pathEscaper: pathEscaperURLQuery{},
 	}
@@ -37,7 +40,8 @@ func NewFlatBlobFs(accountContainer string, storageClient storage.Client) pathfs
 type flatblobFs struct {
 	client                storage.BlobStorageClient
 	log                   *log.Logger
-	defaultFuseAttr       fuse.Attr
+	defaultDirFuseAttr    fuse.Attr
+	defaultFileFuseAttr   fuse.Attr
 	defaultListBlobParams storage.ListBlobsParameters
 	accountContainer      string
 	pathEscaper
@@ -48,7 +52,7 @@ func (fs *flatblobFs) SetDebug(debug bool) {}
 func (fs *flatblobFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
 	// root is always OK
 	if name == "" {
-		return &fs.defaultFuseAttr, fuse.OK
+		return &fs.defaultDirFuseAttr, fuse.OK
 	}
 
 	blobName, err := fs.pathEscaper.FileNameToBlobName(name)
@@ -66,7 +70,8 @@ func (fs *flatblobFs) GetAttr(name string, context *fuse.Context) (*fuse.Attr, f
 	}
 
 	if exists {
-		return &fs.defaultFuseAttr, fuse.OK
+		// NOTE: all entries are files in this flat view.
+		return &fs.defaultFileFuseAttr, fuse.OK
 	}
 
 	return nil, fuse.ENOENT
@@ -93,14 +98,17 @@ func (fs *flatblobFs) Readlink(name string, context *fuse.Context) (string, fuse
 }
 
 func (fs *flatblobFs) Mknod(name string, mode uint32, dev uint32, context *fuse.Context) fuse.Status {
-	// This one is called when we do `touch foo`. Here is where we want to create blobs.
-	// Must also minimally implement Utimens.
+	// This one is called when we do `touch zzz`. Here is where we want to create blobs.
+	// Must also minimally implement Utimens otherwise OS reports IO error.
+	// No need to implement Open, everything works just fine without it.
 	// The sequence is like this:
-	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] GetAttr: name: foo
-	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] Mknod: name: foo mode: 33188 dev: 0
-	//      [flatblobFs]: 2016/04/01 09:28:22 [TRACE] GetAttr: name: foo
-	//      [flatblobFs]: 2016/04/01 09:36:21 [TRACE] Utimens: name: foo
-
+	//      [flatblobFs]: 2016/04/01 09:50:39 [TRACE] GetAttr: name: zzz
+	//      [flatblobFs]: 2016/04/01 09:50:39 [TRACE] Mknod: name: zzz mode: 33188 dev: 0
+	//      [flatblobFs]: 2016/04/01 09:50:39 [TRACE] GetAttr: name: zzz
+	//      [flatblobFs]: 2016/04/01 09:50:40 [TRACE] GetAttr: name: zzz
+	//      [flatblobFs]: 2016/04/01 09:50:40 [TRACE] Open: name: zzz flags: 34817
+	//      [flatblobFs]: 2016/04/01 09:50:40 [TRACE] Utimens: name: zzz Atime: 2016-04-01 09:50:40.066466083 +0000 UTC Mtime: 2016-04-01 09:50:40.066466083 +0000 UTC
+	//      [flatblobFs]: 2016/04/01 09:50:40 [TRACE] GetAttr: name: zzz
 	blobName, err := fs.pathEscaper.FileNameToBlobName(name)
 	if err != nil {
 		fs.log.Printf("[ERROR] Mknod '%s': Could not convert file name to blob name. %s\n", name, err)
