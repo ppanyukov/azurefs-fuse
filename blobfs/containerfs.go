@@ -22,7 +22,8 @@ import (
 // The forward slash is obvious.
 // The star and various others are not allowed either.
 // Also the mininum length is 3 chars.
-var validContainerRegex = regexp.MustCompile(`^[a-zA-Z0-9]{3,}$`)
+// Interestingly underscore (_) and plus (+) is not permitted either.
+var validContainerRegex = regexp.MustCompile(`^[a-zA-Z0-9\-]{3,}$`)
 
 func isInvalidContainerName(name string) bool {
 	// return len(name) < 3 || strings.ContainsAny(name, "/*[]")
