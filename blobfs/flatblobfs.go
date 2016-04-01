@@ -184,6 +184,23 @@ func (fs *flatblobFs) Truncate(name string, offset uint64, context *fuse.Context
 }
 
 func (fs *flatblobFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+	// Here we need to actually read/write stuff into blobs.
+	// The sequence is:
+	//
+	//  cat foo:
+	//      [flatblobFs]: 2016/04/01 11:27:46 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 11:27:46 [TRACE] Open: name: foo flags: 32768 (O_RDONLY|O_LARGEFILE)
+	//
+	//  echo 'ddd' > foo
+	//
+	//      [flatblobFs]: 2016/04/01 11:27:54 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 11:27:54 [TRACE] Open: name: foo flags: 32769 (O_WRONLY|O_ACCMODE|O_LARGEFILE)
+	//
+	//  echo 'ddd' >> foo
+	//
+	//      [flatblobFs]: 2016/04/01 11:29:44 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 11:29:45 [TRACE] Open: name: foo flags: 33793 (O_WRONLY|O_APPEND|O_ACCMODE|O_LARGEFILE)
+
 	return nil, fuse.ENOSYS
 }
 
