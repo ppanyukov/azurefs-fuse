@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
@@ -112,7 +114,8 @@ func (fs *traceFs) Truncate(name string, offset uint64, context *fuse.Context) (
 }
 
 func (fs *traceFs) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	fs.log.Println("[TRACE] Open:", "name:", name, "flags:", flags)
+	flagsAsStr := flagsToText(flags)
+	fs.log.Println("[TRACE] Open:", "name:", name, "flags:", flags, "("+flagsAsStr+")")
 	return fs.fs.Open(name, flags, context)
 }
 
@@ -137,7 +140,8 @@ func (fs *traceFs) Access(name string, mode uint32, context *fuse.Context) (code
 }
 
 func (fs *traceFs) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	fs.log.Println("[TRACE] Create:", "name:", name, "flags:", flags, "mode:", mode)
+	flagsAsStr := flagsToText(flags)
+	fs.log.Println("[TRACE] Create:", "name:", name, "flags:", flags, "("+flagsAsStr+")", "mode:", mode)
 	return fs.fs.Create(name, flags, mode, context)
 }
 
@@ -153,4 +157,105 @@ func (fs *traceFs) String() string {
 func (fs *traceFs) StatFs(name string) *fuse.StatfsOut {
 	fs.log.Println("[TRACE] StatFs:", "name:", name)
 	return fs.fs.StatFs(name)
+}
+
+// flagsToText converts flags given to Create and Open into human-readable strings.
+func flagsToText(flags uint32) string {
+	// The flags are these:
+	//      const (
+	//      	O_RDONLY int = syscall.O_RDONLY // open the file read-only.
+	//      	O_WRONLY int = syscall.O_WRONLY // open the file write-only.
+	//      	O_RDWR   int = syscall.O_RDWR   // open the file read-write.
+	//      	O_APPEND int = syscall.O_APPEND // append data to the file when writing.
+	//      	O_CREATE int = syscall.O_CREAT  // create a new file if none exists.
+	//      	O_EXCL   int = syscall.O_EXCL   // used with O_CREATE, file must not exist
+	//      	O_SYNC   int = syscall.O_SYNC   // open for synchronous I/O.
+	//      	O_TRUNC  int = syscall.O_TRUNC  // if possible, truncate file when opened.
+	//      )
+	//
+	//  Plus maybe additional:
+	//
+	// O_ACCMODE = 3
+	// O_NONBLOCK = 04000
+	// O_ASYNC    = 020000
+	// O_CLOEXEC = 0   ???
+
+	// Provide a helpful breakdown of flags.
+	// TODO(ppanyukov): Surely there is a better way to convert flags into strings? Use cmd/stringer?
+	var textFlags = make([]string, 0, 8)
+
+	// These two are exlusive, doh!
+	if flags&syscall.O_RDWR != 0 {
+		textFlags = append(textFlags, "O_RDWR")
+	} else if flags&syscall.O_WRONLY != 0 {
+		textFlags = append(textFlags, "O_WRONLY")
+	} else {
+		textFlags = append(textFlags, "O_RDONLY")
+	}
+
+	if flags&syscall.O_APPEND != 0 {
+		textFlags = append(textFlags, "O_APPEND")
+	}
+	if flags&syscall.O_CREAT != 0 {
+		textFlags = append(textFlags, "O_CREAT")
+	}
+	if flags&syscall.O_EXCL != 0 {
+		textFlags = append(textFlags, "O_EXCL")
+	}
+	if flags&syscall.O_SYNC != 0 {
+		textFlags = append(textFlags, "O_SYNC")
+	}
+	if flags&syscall.O_TRUNC != 0 {
+		textFlags = append(textFlags, "O_TRUNC")
+	}
+	if flags&syscall.O_ACCMODE != 0 {
+		textFlags = append(textFlags, "O_ACCMODE")
+	}
+	if flags&syscall.O_NONBLOCK != 0 {
+		textFlags = append(textFlags, "O_NONBLOCK")
+	}
+	if flags&syscall.O_ASYNC != 0 {
+		textFlags = append(textFlags, "O_ASYNC")
+	}
+
+	// Additional things from /include/uapi/asm-generic/fcntl.h
+	// Not sure these are correct actually.
+	const (
+		O_DSYNC     = 00010000
+		O_DIRECT    = 00040000
+		O_LARGEFILE = 00100000
+		O_DIRECTORY = 00200000
+		O_NOFOLLOW  = 00400000
+		O_NOATIME   = 01000000
+		O_CLOEXEC   = 02000000
+		O_PATH      = 010000000
+		O_TMPFILE   = 020000000
+	)
+
+	if flags&O_DSYNC != 0 {
+		textFlags = append(textFlags, "O_DSYNC")
+	}
+	if flags&O_DIRECT != 0 {
+		textFlags = append(textFlags, "O_DIRECT")
+	}
+	if flags&O_LARGEFILE != 0 {
+		textFlags = append(textFlags, "O_LARGEFILE")
+	}
+	if flags&O_DIRECTORY != 0 {
+		textFlags = append(textFlags, "O_DIRECTORY")
+	}
+	if flags&O_NOFOLLOW != 0 {
+		textFlags = append(textFlags, "O_NOFOLLOW")
+	}
+	if flags&O_CLOEXEC != 0 {
+		textFlags = append(textFlags, "O_CLOEXEC")
+	}
+	if flags&O_PATH != 0 {
+		textFlags = append(textFlags, "O_PATH")
+	}
+	if flags&O_TMPFILE != 0 {
+		textFlags = append(textFlags, "O_TMPFILE")
+	}
+
+	return strings.Join(textFlags, "|")
 }
