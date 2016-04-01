@@ -134,7 +134,25 @@ func (fs *flatblobFs) Mkdir(name string, mode uint32, context *fuse.Context) fus
 }
 
 func (fs *flatblobFs) Unlink(name string, context *fuse.Context) (code fuse.Status) {
-	return fuse.ENOSYS
+	// This gets called for `rm foo`. The sequence is like this:
+	//
+	//      [flatblobFs]: 2016/04/01 09:53:02 [TRACE] GetAttr: name: foo
+	//      [flatblobFs]: 2016/04/01 09:53:02 [TRACE] Access: name: foo mode: 2
+	//      [flatblobFs]: 2016/04/01 09:53:02 [TRACE] Unlink: name: foo
+	blobName, err := fs.pathEscaper.FileNameToBlobName(name)
+	if err != nil {
+		fs.log.Printf("[ERROR] Unlink '%s': Could not convert file name to blob name. %s\n", name, err)
+		// TODO(ppanyukov): is this correct status to return?
+		return fuse.EINVAL
+	}
+
+	_, err = fs.client.DeleteBlobIfExists(fs.accountContainer, blobName, nil)
+	if err != nil {
+		fs.log.Printf("[ERROR] Unlink '%s': Could not delete blob. %s\n", name, err)
+		return fuse.EIO
+	}
+
+	return fuse.OK
 }
 
 func (fs *flatblobFs) Rmdir(name string, context *fuse.Context) (code fuse.Status) {
