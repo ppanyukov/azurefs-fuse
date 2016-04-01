@@ -34,10 +34,11 @@ In progress:
         - touch <blob_name>: creates an empty blob if does not exist already
               TODO(ppanyukov): implement setting times on blobs.
 
+        - rm <blob_name>: delete blob
+
 
     next steps in this order:
 
-        - rm <blob_name>: delete blob
         - cat 'some content' > <blob_name>: write something into blob
         - cat <blob_name>: read the contents of a blob
 ```
